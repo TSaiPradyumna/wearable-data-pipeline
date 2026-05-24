@@ -1,33 +1,32 @@
-import os
+import sqlite3
 import json
-import asyncpg
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 
-# We read your existing Railway DATABASE_URL variable
-DATABASE_URL = os.getenv("DATABASE_URL")
+DB_FILE = "health_data.db"
 
-# 1. Automated Table Creator (Runs on Application Startup)
+# 1. Database Automated Table Creator (Runs on Startup)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Application booting up... Connecting to database via asyncpg.")
+    print("Application booting up... Initializing SQLite storage engine.")
     try:
-        # Open a quick connection pool
-        conn = await asyncpg.connect(DATABASE_URL)
-        # Create the table if it doesn't exist
-        await conn.execute("""
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        # Create a table to hold your fitness data packets
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS health_logs (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT,
                 data_type TEXT,
-                raw_payload JSONB,
+                raw_payload TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
-        await conn.close()
-        print("Database table verification complete: 'health_logs' table is ready.")
+        conn.commit()
+        conn.close()
+        print("Storage engine configuration complete: 'health_logs' is ready.")
     except Exception as e:
-        print(f"CRITICAL ERROR during startup database configuration: {str(e)}")
+        print(f"CRITICAL STARTUP ERROR: {str(e)}")
     yield
     print("Application shutting down smoothly.")
 
@@ -43,18 +42,17 @@ async def receive_data(request: Request):
         user_id = payload.get("user", {}).get("user_id", "unknown_user")
         data_type = payload.get("type", "unknown_type")
         
-        # Connect and insert the record asynchronously
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute(
-            """
-            INSERT INTO health_logs (user_id, data_type, raw_payload) 
-            VALUES ($1, $2, $3);
-            """,
-            user_id, data_type, json.dumps(payload)
+        # Connect and save directly to the local disk file
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO health_logs (user_id, data_type, raw_payload) VALUES (?, ?, ?);",
+            (user_id, data_type, json.dumps(payload))
         )
-        await conn.close()
+        conn.commit()
+        conn.close()
         
-        return {"status": "success", "message": "Saved to database via asyncpg!"}
+        return {"status": "success", "message": "Saved to local cloud storage vault!"}
         
     except Exception as e:
         print(f"Webhook Interception Error: {str(e)}")
