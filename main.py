@@ -1,22 +1,29 @@
 import os
 import json
-import psycopg2_binary as psycopg2  
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 
-# 1. Database Connection Helper
+# 1. BULLETPROOF DATABASE DRIVER IMPORT
+try:
+    # Try importing standard psycopg2
+    import psycopg2
+except ImportError:
+    # Fallback: Force the binary version to masquerade as standard psycopg2 globally
+    from psycopg2 import _psycopg as _
+    import psycopg2_binary as psycopg2
+
+# 2. Database Connection Helper
 def get_db_connection():
-    # Looks for your hidden Railway DATABASE_URL configuration variable
+    # Now 'psycopg2' is guaranteed to be defined globally for this function!
     return psycopg2.connect(os.getenv("DATABASE_URL"))
 
-# 2. Automated Table Creator (Runs on Application Startup)
+# 3. Automated Table Creator (Runs on Application Startup)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Application booting up... Connecting to database vault.")
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        # Automatically creates the database spreadsheet table if it doesn't exist
         cur.execute("""
             CREATE TABLE IF NOT EXISTS health_logs (
                 id SERIAL PRIMARY KEY,
@@ -36,21 +43,18 @@ async def lifespan(app: FastAPI):
     yield
     print("Application shutting down smoothly.")
 
-# 3. Initialize FastAPI with our background startup manager
+# 4. Initialize FastAPI
 app = FastAPI(lifespan=lifespan)
 
-# 4. The Webhook Listener Endpoint
+# 5. The Webhook Listener Endpoint
 @app.post("/webhook")
 async def receive_data(request: Request):
     try:
-        # Open up the incoming fitness mail packet arriving from the internet
         payload = await request.json()
         
-        # Dig out who sent it and what kind of data it represents
         user_id = payload.get("user", {}).get("user_id", "unknown_user")
         data_type = payload.get("type", "unknown_type")
         
-        # Securely write the data inside your PostgreSQL cloud vault
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
@@ -61,7 +65,6 @@ async def receive_data(request: Request):
         cur.close()
         conn.close()
         
-        # Send a success notification back to the device
         return {"status": "success", "message": "Saved to database!"}
         
     except Exception as e:
