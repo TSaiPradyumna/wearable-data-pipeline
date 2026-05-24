@@ -1,26 +1,30 @@
 import os
 import json
+import logging
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 
-# 1. BULLETPROOF DATABASE DRIVER IMPORT
 try:
-    # Try importing standard psycopg2
     import psycopg2
-except ImportError:
-    # Fallback: Force the binary version to masquerade as standard psycopg2 globally
-    from psycopg2 import _psycopg as _
-    import psycopg2_binary as psycopg2
+    from psycopg2.extras import Json
+except Exception as exc:
+    raise RuntimeError("Missing dependency 'psycopg2'. Install with: pip install psycopg2-binary") from exc
 
-# 2. Database Connection Helper
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 def get_db_connection():
-    # Now 'psycopg2' is guaranteed to be defined globally for this function!
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+    return psycopg2.connect(dsn)
 
-# 3. Automated Table Creator (Runs on Application Startup)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Application booting up... Connecting to database vault.")
+    logger.info("Application booting up... Connecting to database.")
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -35,38 +39,48 @@ async def lifespan(app: FastAPI):
         """)
         conn.commit()
         cur.close()
-        conn.close()
-        print("Database table verification complete: 'health_logs' table is ready.")
-    except Exception as e:
-        print(f"CRITICAL ERROR during startup database configuration: {str(e)}")
-    
-    yield
-    print("Application shutting down smoothly.")
+        logger.info("Database table verification complete: 'health_logs' table is ready.")
+    except Exception:
+        logger.exception("CRITICAL ERROR during startup database configuration")
+        raise
+    finally:
+        if conn:
+            conn.close()
 
-# 4. Initialize FastAPI
+    try:
+        yield
+    finally:
+        logger.info("Application shutting down smoothly.")
+
+
 app = FastAPI(lifespan=lifespan)
 
-# 5. The Webhook Listener Endpoint
+
 @app.post("/webhook")
 async def receive_data(request: Request):
     try:
         payload = await request.json()
-        
-        user_id = payload.get("user", {}).get("user_id", "unknown_user")
-        data_type = payload.get("type", "unknown_type")
-        
+    except Exception:
+        logger.exception("Invalid JSON payload received")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    user_id = payload.get("user", {}).get("user_id", "unknown_user")
+    data_type = payload.get("type", "unknown_type")
+
+    conn = None
+    try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO health_logs (user_id, data_type, raw_payload) VALUES (%s, %s, %s);",
-            (user_id, data_type, json.dumps(payload))
+            (user_id, data_type, Json(payload)),
         )
         conn.commit()
         cur.close()
-        conn.close()
-        
         return {"status": "success", "message": "Saved to database!"}
-        
-    except Exception as e:
-        print(f"Webhook Interception Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database Write Failure: {str(e)}")
+    except Exception:
+        logger.exception("Webhook Interception Error")
+        raise HTTPException(status_code=500, detail="Database Write Failure")
+    finally:
+        if conn:
+            conn.close()
