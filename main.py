@@ -2,49 +2,77 @@ import os
 import json
 import logging
 import asyncpg
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("async_pipeline")
+logger = logging.getLogger("clinical_pipeline")
 
-# Read your existing Railway database string
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Connecting to cloud PostgreSQL vault via asyncpg...")
+    logger.info("Initializing clinical storage cluster systems...")
     try:
-        # Establish a temporary connection pool to handle schema verification
         conn = await asyncpg.connect(DATABASE_URL)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS health_logs (
                 id SERIAL PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 data_type TEXT NOT NULL,
+                metric_value INTEGER NOT NULL,
+                acuity_status TEXT NOT NULL,
                 raw_payload TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         await conn.close()
-        logger.info("Async PostgreSQL database migration successful.")
+        logger.info("Clinical database schemas verified successfully.")
     except Exception as e:
-        logger.critical(f"Fatal cloud storage initialization failure: {str(e)}")
+        logger.critical(f"Fatal initialization failure on cloud cluster storage: {str(e)}")
     yield
-    logger.info("Executing safe pipeline teardown procedures.")
 
-app = FastAPI(title="Wearable Data Pipeline Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Clinical Telemetry Pipeline Gateway", version="2.0.0", lifespan=lifespan)
 
-class TelemetryPayload(BaseModel):
+# Enterprise Validation Framework with Real Biological Safe Guards
+class ClinicalPayload(BaseModel):
     user_id: str = Field(..., min_length=3, max_length=50)
     data_type: str = Field(...)
-    metric_value: int = Field(..., ge=0, le=10000)
+    metric_value: int = Field(..., ge=0, le=5000)
 
+# Medical Threshold Evaluation Engine
+def evaluate_clinical_acuity(metric: str, value: int) -> str:
+    if metric == "heart_rate":
+        return "CRITICAL" if value < 40 or value > 130 else "MONITOR" if value < 60 or value > 100 else "NORMAL"
+    elif metric == "oxygen_saturation":
+        return "CRITICAL" if value < 90 else "MONITOR" if value < 95 else "NORMAL"
+    elif metric == "blood_glucose":
+        return "CRITICAL" if value < 60 or value > 250 else "MONITOR" if value < 70 or value > 140 else "NORMAL"
+    elif metric == "systolic_bp":
+        return "CRITICAL" if value < 80 or value > 180 else "MONITOR" if value < 90 or value > 130 else "NORMAL"
+    elif metric == "respiratory_rate":
+        return "CRITICAL" if value < 8 or value > 30 else "MONITOR" if value < 12 or value > 20 else "NORMAL"
+    elif metric == "body_temperature":
+        # Multiplied by 10 internally to store as integer decimal format (e.g. 98.6 -> 986)
+        return "CRITICAL" if value < 950 or value > 1030 else "MONITOR" if value < 970 or value > 995 else "NORMAL"
+    return "NORMAL"
+
+# Display Label Converter
+def get_metric_label(metric: str) -> str:
+    labels = {
+        "heart_rate": "Heart Rate (BPM)",
+        "oxygen_saturation": "Pulse Oximetry (SpO2 %)",
+        "blood_glucose": "Blood Glucose (mg/dL)",
+        "systolic_bp": "Systolic Blood Pressure (mmHg)",
+        "respiratory_rate": "Respiratory Rate (RPM)",
+        "body_temperature": "Core Body Temperature (°F x10)"
+    }
+    return labels.get(metric, metric)
 
 # ==========================================
-# 1. DATA INGESTION USER INTERFACE
+# 1. EXPANDED CLINICAL INGESTION INTERFACE
 # ==========================================
 @app.get("/", response_class=HTMLResponse)
 async def render_ingestion_portal():
@@ -54,51 +82,55 @@ async def render_ingestion_portal():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Data Ingestion Portal | Telemetry Gateway</title>
+        <title>Clinical Data Ingestion | Care Network Gateway</title>
         <style>
-            :root { --primary: #2563eb; --primary-hover: #1d4ed8; --background: #f8fafc; --surface: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border: #cbd5e1; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--background); color: var(--text-main); margin: 0; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; }
-            .portal-container { background: var(--surface); padding: 40px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); width: 100%; max-width: 480px; box-sizing: border-box; }
-            .brand-header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 30px; }
-            h2 { margin: 0; color: var(--text-main); font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
-            .subtitle { color: var(--text-muted); font-size: 14px; margin: 8px 0 0 0; line-height: 1.5; }
-            .form-group { margin-bottom: 20px; }
-            label { font-weight: 500; display: block; margin-bottom: 8px; color: #334155; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
-            input, select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: 14px; color: var(--text-main); }
-            input:focus, select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
-            button { width: 100%; background-color: var(--primary); color: white; border: none; padding: 12px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 15px; }
+            :root { --primary: #0284c7; --primary-hover: #0369a1; --background: #f1f5f9; --surface: #ffffff; --text-main: #0f172a; --text-muted: #475569; --border: #cbd5e1; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--background); color: var(--text-main); margin: 0; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; }
+            .portal-container { background: var(--surface); padding: 40px; border-radius: 6px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); width: 100%; max-width: 500px; box-sizing: border-box; }
+            .brand-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+            h2 { margin: 0; color: var(--text-main); font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+            .subtitle { color: var(--text-muted); font-size: 13px; margin: 6px 0 0 0; line-height: 1.5; }
+            .form-group { margin-bottom: 18px; }
+            label { font-weight: 600; display: block; margin-bottom: 6px; color: #334155; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+            input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-size: 14px; color: var(--text-main); background-color: #fff; }
+            input:focus, select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15); }
+            button { width: 100%; background-color: var(--primary); color: white; border: none; padding: 12px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 10px; transition: background 0.15s; }
             button:hover { background-color: var(--primary-hover); }
-            .meta-navigation { margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 20px; text-align: center; }
+            .meta-navigation { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 20px; text-align: center; }
             .meta-navigation a { color: var(--primary); text-decoration: none; font-weight: 500; font-size: 13px; }
+            .meta-navigation a:hover { text-decoration: underline; }
         </style>
     </head>
     <body>
         <div class="portal-container">
             <div class="brand-header">
-                <h2>Telemetry Ingestion Gateway</h2>
-                <p class="subtitle">Submit verified edge node data packets to the permanent cloud database layer using asyncpg.</p>
+                <h2>Clinical Ingestion Gateway</h2>
+                <p class="subtitle">Secure electronic medical interface for recording real-time physiological metrics directly to remote monitoring databases.</p>
             </div>
             <form action="/submit-web" method="post">
                 <div class="form-group">
-                    <label>User Identifier (UUID)</label>
-                    <input type="text" name="user_id" placeholder="e.g., usr_9921x" required>
+                    <label>Patient Encounter ID / Reference</label>
+                    <input type="text" name="user_id" placeholder="e.g., PT-90821" required>
                 </div>
                 <div class="form-group">
-                    <label>Metrics Classification</label>
+                    <label>Physiological Metric Classification</label>
                     <select name="data_type">
                         <option value="heart_rate">Heart Rate (BPM)</option>
-                        <option value="step_count">Step Count (Total)</option>
-                        <option value="oxygen_saturation">Peripheral Oxygen Saturation (SpO2)</option>
+                        <option value="oxygen_saturation">Pulse Oximetry (SpO2 %)</option>
+                        <option value="blood_glucose">Blood Glucose (mg/dL)</option>
+                        <option value="systolic_bp">Systolic Blood Pressure (mmHg)</option>
+                        <option value="respiratory_rate">Respiratory Rate (RPM)</option>
+                        <option value="body_temperature">Core Body Temp (Fahrenheit x10, e.g. 986)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Quantitative Value</label>
-                    <input type="number" name="metric_value" placeholder="e.g., 75" required>
+                    <label>Observed Value</label>
+                    <input type="number" name="metric_value" placeholder="Enter numeric observation" required>
                 </div>
-                <button type="submit">Execute Transmission</button>
+                <button type="submit">Commit Clinical Log</button>
             </form>
             <div class="meta-navigation">
-                <a href="/history" target="_blank">Access Administrative Logs Data →</a>
+                <a href="/history">Access Central Surveillance Dashboard →</a>
             </div>
         </div>
     </body>
@@ -106,70 +138,76 @@ async def render_ingestion_portal():
     """
     return HTMLResponse(content=html_content)
 
-
 # ==========================================
-# 2. INGESTION DATA COMPLIANCE PIPELINE
+# 2. DATA PROCESSING & TRIAGE PIPELINE
 # ==========================================
 @app.post("/submit-web")
 async def process_web_ingestion(user_id: str = Form(...), data_type: str = Form(...), metric_value: int = Form(...)):
     try:
-        validated_data = TelemetryPayload(user_id=user_id, data_type=data_type, metric_value=metric_value)
+        validated = ClinicalPayload(user_id=user_id, data_type=data_type, metric_value=metric_value)
+        acuity = evaluate_clinical_acuity(validated.data_type, validated.metric_value)
+        
         payload = {
-            "metadata": {"source_agent": "web_gateway_portal", "compliance_version": "1.0.0"},
-            "telemetry": {
-                "user_id": validated_data.user_id,
-                "type": validated_data.data_type,
-                "metrics": {"value": validated_data.metric_value}
+            "system_headers": {"pipeline_agent": "hosp_node_v2", "triage_engine": "mews_v1.0.0"},
+            "clinical_node": {
+                "patient_id": validated.user_id,
+                "metric_class": validated.data_type,
+                "observed_value": validated.metric_value,
+                "calculated_acuity": acuity
             }
         }
         
-        # Connect asynchronously to your permanent PostgreSQL cluster
         conn = await asyncpg.connect(DATABASE_URL)
-        
-        # asyncpg utilizes positional parameters ($1, $2, $3) instead of %s
         await conn.execute(
-            "INSERT INTO health_logs (user_id, data_type, raw_payload) VALUES ($1, $2, $3);",
-            validated_data.user_id, validated_data.data_type, json.dumps(payload)
+            """INSERT INTO health_logs (user_id, data_type, metric_value, acuity_status, raw_payload) 
+               VALUES ($1, $2, $3, $4, $5);""",
+            validated.user_id, validated_data_type := validated.data_type, validated.metric_value, acuity, json.dumps(payload)
         )
         await conn.close()
         
-        return HTMLResponse(content="""
-            <body style="font-family:-apple-system,sans-serif; background-color:#f8fafc; text-align:center; padding:60px 20px;">
-                <div style="background:#fff; border:1px solid #e2e8f0; padding:40px; border-radius:8px; display:inline-block; max-width:400px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                    <h3 style="color:#16a34a; margin:0 0 10px 0; font-size:18px;">Transaction Confirmed</h3>
-                    <p style="color:#64748b; font-size:14px; margin:0 0 25px 0; line-height:1.5;">The telemetry packet has been written permanently via asyncpg to the relational cluster database.</p>
-                    <a href="/" style="background-color:#2563eb; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-size:13px; font-weight:600;">Return to Gateway</a>
+        return HTMLResponse(content=f"""
+            <body style="font-family:-apple-system,sans-serif; background-color:#f1f5f9; text-align:center; padding:60px 20px;">
+                <div style="background:#fff; border:1px solid #e2e8f0; padding:40px; border-radius:6px; display:inline-block; max-width:420px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+                    <h3 style="color:#0284c7; margin:0 0 10px 0; font-size:18px;">Log Transmitted Successfully</h3>
+                    <p style="color:#475569; font-size:14px; margin:0 0 25px 0; line-height:1.5;">Patient record processed. System Acuity Status rated: <strong>{acuity}</strong></p>
+                    <a href="/" style="background-color:#0284c7; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-size:13px; font-weight:600;">Return to Gateway</a>
                 </div>
             </body>
         """)
     except Exception as e:
-        logger.error(f"Async ingestion failure: {str(e)}")
+        logger.error(f"Ingestion anomaly caught: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ==========================================
-# 3. PERMANENT SYSTEM DATA MONITOR
+# 3. HIGH-ACUITY CLINICAL CENTRAL DASHBOARD
 # ==========================================
 @app.get("/history", response_class=HTMLResponse)
 async def render_system_dashboard():
     try:
         conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT id, user_id, data_type, raw_payload, created_at FROM health_logs ORDER BY id DESC;")
+        rows = await conn.fetch("SELECT id, user_id, data_type, metric_value, acuity_status, created_at FROM health_logs ORDER BY id DESC;")
         await conn.close()
         
         table_rows = ""
         for row in rows:
-            # asyncpg rows can be accessed like dictionaries or indexed tuples
-            payload_data = json.loads(row['raw_payload'])
-            metrics_string = json.dumps(payload_data.get("telemetry", {}).get("metrics", {}))
+            acuity = row['acuity_status']
             
+            # Clinical Status Palette Assignments
+            badge_color, text_color = ("#fee2e2", "#991b1b") if acuity == "CRITICAL" else ("#fef3c7", "#92400e") if acuity == "MONITOR" else ("#dcfce7", "#166534")
+            
+            display_value = row['metric_value']
+            # Reformat temperature back to localized decimal for visualization
+            if row['data_type'] == "body_temperature":
+                display_value = f"{display_value / 10:.1f} °F"
+                
             table_rows += f"""
             <tr>
                 <td>{row['id']}</td>
-                <td><span class="user-token">{row['user_id']}</span></td>
-                <td><span class="metric-type">{row['data_type']}</span></td>
-                <td class="payload-cell">{metrics_string}</td>
-                <td>{row['created_at']}</td>
+                <td><span class="patient-id-token">{row['user_id']}</span></td>
+                <td><strong>{get_metric_label(row['data_type'])}</strong></td>
+                <td style="font-weight: 600; font-size:15px;">{display_value}</td>
+                <td><span class="acuity-badge" style="background-color: {badge_color}; color: {text_color};">{acuity}</span></td>
+                <td style="color:#64748b; font-size:13px;">{row['created_at'].strftime('%Y-%m-%d %H:%M:%S')}</td>
             </tr>
             """
             
@@ -178,32 +216,34 @@ async def render_system_dashboard():
         <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <title>System Logs Viewer | Administrative Control</title>
+            <title>Central Telemetry Surveillance View</title>
             <style>
-                body {{ font-family: -apple-system, sans-serif; background-color: #f8fafc; margin: 0; padding: 40px 20px; color: #0f172a; }}
-                .dashboard-frame {{ max-width: 1100px; margin: 0 auto; }}
-                .action-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 2px solid #edf2f7; padding-bottom: 15px; }}
-                h2 {{ font-size: 20px; font-weight: 600; margin: 0; }}
-                .refresh-action {{ background: #fff; color: #0f172a; border: 1px solid #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; font-size: 13px; }}
-                table {{ width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }}
+                body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f8fafc; margin: 0; padding: 40px; color: #0f172a; }}
+                .container-frame {{ max-width: 1200px; margin: 0 auto; }}
+                .action-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }}
+                h2 {{ font-size: 20px; font-weight: 600; margin: 0; color: #1e3a8a; letter-spacing: -0.3px; }}
+                .refresh-action {{ background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 4px; font-weight: 500; font-size: 13px; transition: background-color 0.1s; }}
+                .refresh-action:hover {{ background-color: #f1f5f9; }}
+                table {{ width: 100%; background: white; border-collapse: collapse; border-radius: 6px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }}
                 th, td {{ padding: 14px 20px; text-align: left; font-size: 14px; border-bottom: 1px solid #f1f5f9; }}
-                th {{ background-color: #f8fafc; color: #475569; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }}
-                .user-token {{ font-family: monospace; background: #f1f5f9; color: #334155; padding: 3px 6px; border-radius: 4px; font-size: 13px; }}
-                .payload-cell {{ font-family: monospace; color: #0284c7; font-size: 13px; }}
-                .state-empty {{ text-align: center; color: #64748b; padding: 60px 20px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; }}
+                th {{ background-color: #f8fafc; color: #475569; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }}
+                tr:hover {{ background-color: #fafafa; }}
+                .patient-id-token {{ font-family: monospace; background: #e2e8f0; color: #1e293b; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 13px; }}
+                .acuity-badge {{ padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }}
+                .state-empty {{ text-align: center; color: #64748b; padding: 60px 20px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; }}
             </style>
         </head>
         <body>
-            <div class="dashboard-frame">
+            <div class="container-frame">
                 <div class="action-bar">
-                    <h2>Data Access Logging & Analytics Dashboard (Async Engine)</h2>
-                    <a href="/history" class="refresh-action">Synchronize Cache Layer</a>
+                    <h2>Central Telemetry Surveillance Station</h2>
+                    <a href="/history" class="refresh-action">Force Sync Telemetry Layer</a>
                 </div>
-                {"<table><tr><th width='8%'>ID</th><th width='25%'>Target Subject Token</th><th width='20%'>Class</th><th>Structured Metrics Node</th><th width='20%'>Ingestion Timestamp</th></tr>" + table_rows + "</table>" if rows else "<div class='state-empty'><h3>Zero Database Mutations Found</h3><p>Ingestion streams are currently vacant.</p></div>"}
+                {"<table><tr><th width='8%'>Encounter ID</th><th width='20%'>Patient Reference</th><th width='25%'>Metric Classification</th><th width='15%'>Observed Value</th><th width='15%'>Acuity Status</th><th>Ingestion Timestamp</th></tr>" + table_rows + "</table>" if rows else "<div class='state-empty'><h3>No Active Patient Surveillance Feeds</h3><p>Awaiting ingestion streams from active medical edge hardware nodes.</p></div>"}
             </div>
         </body>
         </html>
         """
         return HTMLResponse(content=html_content)
     except Exception as e:
-        return HTMLResponse(content=f"Database Async Resolution Exception: {str(e)}", status_code=500)
+        return HTMLResponse(content=f"Surveillance Engine Error: {str(e)}", status_code=500)
