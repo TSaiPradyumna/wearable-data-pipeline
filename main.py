@@ -1,6 +1,6 @@
 import os
 import json
-import psycopg2
+import psycopg
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 
