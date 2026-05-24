@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
 # 2. Initialize FastAPI
 app = FastAPI(lifespan=lifespan)
 
-# 3. The Webhook Listener Endpoint
+# 3. The Webhook Listener Endpoint (Pushes data IN via POST)
 @app.post("/webhook")
 async def receive_data(request: Request):
     try:
@@ -57,3 +57,33 @@ async def receive_data(request: Request):
     except Exception as e:
         print(f"Webhook Interception Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database Write Failure: {str(e)}")
+
+# 4. The History Viewer Endpoint (Pulls data OUT via GET for Browsers)
+@app.get("/history")
+async def get_history():
+    try:
+        # Connect to the database file on disk
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Pull every log out of the vault, newest records first
+        cursor.execute("SELECT id, user_id, data_type, raw_payload, created_at FROM health_logs ORDER BY id DESC;")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Reformat the raw database rows into a clean JSON list layout
+        history = []
+        for row in rows:
+            history.append({
+                "log_id": row[0],
+                "user_id": row[1],
+                "data_type": row[2],
+                "payload": json.loads(row[3]),  # Convert the text string back into a nested JSON object
+                "timestamp": row[4]
+            })
+            
+        return {"status": "success", "total_records": len(history), "data": history}
+        
+    except Exception as e:
+        print(f"History Retrieval Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database Read Failure: {str(e)}")
