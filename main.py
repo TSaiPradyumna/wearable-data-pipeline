@@ -1,13 +1,13 @@
 import os
 import json
-import psycopg2
+import psycopg
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 
 # 1. Database Connection Helper
 def get_db_connection():
     # Looks for your hidden Railway DATABASE_URL configuration variable
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    return psycopg.connect(os.getenv("DATABASE_URL"))
 
 # 2. Automated Table Creator (Runs on Application Startup)
 @asynccontextmanager
