@@ -5,7 +5,7 @@ import asyncpg
 from pydantic import BaseModel, Field
 from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templatetypes import Jinja2Templates
+from fastapi.templating import Jinja2Templates  # Corrected Import Path
 from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -150,7 +150,6 @@ async def render_system_dashboard(request: Request):
         rows = await conn.fetch("SELECT id, user_id, patient_name, patient_age, ward_number, data_type, metric_value, acuity_status, created_at FROM health_logs ORDER BY id DESC;")
         await conn.close()
         
-        # Inject context directly into your modular template engine cleanly
         return templates.TemplateResponse("history.html", {
             "request": request, 
             "rows": rows, 
