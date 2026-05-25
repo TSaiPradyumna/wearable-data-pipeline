@@ -1,0 +1,142 @@
+{% extends "layout.html" %}
+{% block title %}Spatial Mobility Monitor{% endblock %}
+{% block content %}
+<div style="display: flex; gap: 20px; align-items: stretch; margin-bottom: 25px;">
+    <div class="card" style="flex: 1; max-width: 400px; padding: 25px;">
+        <h3 style="margin-top: 0; color: #1e3a8a;">🛰️ Mobile Node Activation</h3>
+        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+            Activate this panel on any target mobile phone browser to initialize hardware-level tracking streams without downloading external software apps.
+        </p>
+        
+        <div style="background: #f1f5f9; padding: 15px; border-radius: 4px; margin-bottom: 20px; font-size: 13px;">
+            <strong>Transmission Status:</strong> <span id="track-status" style="color: #94a3b8; font-weight: 700;">INACTIVE</span><br>
+            <strong>Current Latitude:</strong> <span id="lbl-lat" style="font-family: monospace;">0.0000</span><br>
+            <strong>Current Longitude:</strong> <span id="lbl-lon" style="font-family: monospace;">0.0000</span>
+        </div>
+
+        <div class="form-group full">
+            <label>Patient ID Mapping Context</label>
+            <input type="text" id="track-user-id" value="MOB-99" placeholder="e.g., PT-882">
+        </div>
+        
+        <button id="btn-toggle-tracking" onclick="toggleHardwareTracking();" style="width: 100%; background: #16a34a;">
+            Initialize Active Tracking Stream
+        </button>
+    </div>
+
+    <div class="card" style="flex: 2; padding: 25px;">
+        <h3 style="margin-top: 0; color: #1e3a8a;">Spatial Tracking Core Specifications</h3>
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.6;">
+            By utilizing the HTML5 Geolocation API matrix, the gateway establishes low-latency background hooks into consumer hardware mobile chipsets. 
+            The listener intercepts localized delta movements automatically, enforcing data transmission loops only when geographical coordinates shift.
+        </p>
+        <div style="margin-top: 20px; display: flex; gap: 15px;">
+            <div style="flex: 1; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px; font-size: 13px;">
+                <strong>Incremental Tracking</strong> Filters unchanged coordinates natively to optimize mobile battery performance.
+            </div>
+            <div style="flex: 1; background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px; font-size: 13px;">
+                <strong>Zero-Install Profile</strong> Share this specific URL path with any node to stream data immediately.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="padding: 30px;">
+    <h3 style="margin-top: 0; margin-bottom: 20px; color: #1e3a8a;">Real-Time Mobility & Log Streams</h3>
+    {% if rows %}
+    <table style="width: 100%; background: white; border-collapse: collapse; border-radius: 6px; overflow: hidden; border: 1px solid #e2e8f0;">
+        <thead>
+            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left;">
+                <th style="padding: 12px 15px; font-size: 11px; text-transform: uppercase; color: #475569;">Encounter ID</th>
+                <th style="padding: 12px 15px; font-size: 11px; text-transform: uppercase; color: #475569;">Geographical Coordinates</th>
+                <th style="padding: 12px 15px; font-size: 11px; text-transform: uppercase; color: #475569;">Calculated Accumulated Steps</th>
+                <th style="padding: 12px 15px; font-size: 11px; text-transform: uppercase; color: #475569;">Pipeline Telemetry Status</th>
+                <th style="padding: 12px 15px; font-size: 11px; text-transform: uppercase; color: #475569;">Last Log Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 12px 15px;"><span style="font-family: monospace; background: #e2e8f0; color: #1e293b; padding: 4px 6px; border-radius: 4px; font-weight: 600; font-size: 12px;">{{ row.user_id }}</span></td>
+                <td style="padding: 12px 15px; font-family: monospace; font-size: 13px; color: #334155;">
+                    Lat: <strong>{{ "%.5f"|format(row.latitude) }}</strong>, Lon: <strong>{{ "%.5f"|format(row.longitude) }}</strong>
+                </td>
+                <td style="padding: 12px 15px; font-weight: 700; color: #0284c7;">{{ row.steps }} steps</td>
+                <td style="padding: 12px 15px;"><span style="padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #166534;">AUTO_SYNC</span></td>
+                <td style="padding: 12px 15px; color: #64748b; font-size: 12px;">{{ row.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; color: #64748b; padding: 40px 0;">Awaiting mobility tracking inputs from external device streams...</div>
+    {% endif %}
+</div>
+
+<script>
+    let watchId = null;
+    let simulatedStepsCount = 1000;
+
+    function toggleHardwareTracking() {
+        const btn = document.getElementById('btn-toggle-tracking');
+        const statusLbl = document.getElementById('track-status');
+        const userIdInput = document.getElementById('track-user-id');
+
+        if (watchId !== null) {
+            // Stop tracking
+            navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+            btn.innerText = "Initialize Active Tracking Stream";
+            btn.style.background = "#16a34a";
+            statusLbl.innerText = "INACTIVE";
+            statusLbl.style.color = "#94a3b8";
+            return;
+        }
+
+        // Start HTML5 tracking
+        if (!navigator.geolocation) {
+            alert("This mobile browser lacks support for architectural hardware telemetry mapping.");
+            return;
+        }
+
+        btn.innerText = "Terminate Active Tracking Stream";
+        btn.style.background = "#dc2626";
+        statusLbl.innerText = "STREAMING LIVE";
+        statusLbl.style.color = "#16a34a";
+
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                
+                document.getElementById('lbl-lat').innerText = lat.toFixed(5);
+                document.getElementById('lbl-lon').innerText = lon.toFixed(5);
+                
+                // Simulate an incrementing step counter baseline for testing mobility shifts
+                simulatedStepsCount += Math.floor(Math.random() * 25) + 5;
+
+                // Fire data packet directly to FastAPI Header endpoint pipeline
+                fetch('/submit-movement', {
+                    method: 'POST',
+                    headers: {
+                        'user_id': userIdInput.value,
+                        'latitude': lat.toString(),
+                        'longitude': lon.toString(),
+                        'steps': simulatedStepsCount.toString()
+                    }
+                })
+                .then(res => console.log("Spatial telemetry coordinate written: Status " + res.status))
+                .catch(err => console.error("Pipeline failure: ", err));
+            },
+            (err) => {
+                console.warn("GPS tracking error context code: " + err.code);
+            },
+            {
+                enableHighAccuracy: true, // Use hardware GPS chips instead of towers
+                maximumAge: 0,            // Force non-cached tracking results
+                timeout: 10000
+            }
+        );
+    }
+</script>
+{% endblock %}
