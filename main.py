@@ -5,7 +5,7 @@ import asyncpg
 from pydantic import BaseModel, Field
 from fastapi import FastAPI, Request, HTTPException, Form, Header
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templatetypes import Jinja2Templates
+from fastapi.templating import Jinja2Templates  
 from contextlib import asynccontextmanager
 from typing import Optional
 
